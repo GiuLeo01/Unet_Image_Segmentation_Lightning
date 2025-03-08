@@ -1,6 +1,6 @@
 
 
-class unet_encoder(torch.nn.Module):
+class UnetEncoder(torch.nn.Module):
   def __init__(self, in_channel, num_filters):
     super().__init__()
 
@@ -23,7 +23,7 @@ class unet_encoder(torch.nn.Module):
   
 
 
-class unet_decoder(torch.nn.Module):
+class UnetDecoder(torch.nn.Module):
   def __init__(self, in_channel, num_filters):
     super().__init__()
 
@@ -65,23 +65,23 @@ class unet_decoder(torch.nn.Module):
 
 
 
-class unet(torch.nn.Module):
+class Unet(torch.nn.Module):
   def __init__(self):
     super().__init__()
 
-    self.enc1 = unet_encoder(3,64)
-    self.enc2 = unet_encoder(64,128)
-    self.enc3 = unet_encoder(128,256)
-    self.enc4 = unet_encoder(256,512)
+    self.enc1 = UnetEncoder(3,64)
+    self.enc2 = UnetEncoder(64,128)
+    self.enc3 = UnetEncoder(128,256)
+    self.enc4 = UnetEncoder(256,512)
     
     self.bot_conv1 = torch.nn.Conv2d(512,1024, (3,3))
     self.bot_conv2 = torch.nn.Conv2d(1024,1024, (3,3))
 
     
-    self.dec1 = unet_decoder(64*2, 64)
-    self.dec2 = unet_decoder(128*2, 128)
-    self.dec3 = unet_decoder(256*2, 256)
-    self.dec4 = unet_decoder(512*2, 512)
+    self.dec1 = UnetDecoder(64*2, 64)
+    self.dec2 = UnetDecoder(128*2, 128)
+    self.dec3 = UnetDecoder(256*2, 256)
+    self.dec4 = UnetDecoder(512*2, 512)
 
     self.conv_final = torch.nn.Conv2d(64, 1, (1,1))
   
@@ -106,3 +106,5 @@ class unet(torch.nn.Module):
     x = torch.nn.functional.sigmoid(self.conv_final(d1))
 
     return x
+
+
