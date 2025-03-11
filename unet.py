@@ -134,6 +134,9 @@ class LitUnet(L.LightningModule):
         super().__init__()
         self.net = Unet()
 
+    def forward(self, x):
+      return self.net(x)
+
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.

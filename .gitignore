@@ -3,3 +3,5 @@ logs/
 lightning_logs/
 old/
 trained_unet.ckpt
+trained_unet_model.onnx
+__pycache__/
