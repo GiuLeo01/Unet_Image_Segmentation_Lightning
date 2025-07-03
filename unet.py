@@ -9,7 +9,7 @@ class UnetEncoder(torch.nn.Module):
   def __init__(self, in_channel, num_filters):
     super().__init__()
 
-    # layer convolutivo con 10 filtri 5x5
+    # convolutional layer with filters 3x3
     self.conv1 = torch.nn.Conv2d(in_channel, num_filters, (3,3), padding='valid')
     self.batchnorm1 = torch.nn.BatchNorm2d(num_filters)
     self.conv2 = torch.nn.Conv2d(num_filters, num_filters, (3,3), padding='valid')
@@ -26,6 +26,7 @@ class UnetEncoder(torch.nn.Module):
     x = self.batchnorm2(x)
     x = torch.nn.functional.relu(x)
 
+    # downsampling step
     x = self.pool(x)
 
     return x
@@ -36,12 +37,10 @@ class UnetDecoder(torch.nn.Module):
   def __init__(self, in_channel, num_filters):
     super().__init__()
 
-
+    # transpose convolution for upsampling
     self.tconv1 = torch.nn.ConvTranspose2d(in_channel, num_filters, (2,2), stride=2)
 
-
-
-
+    # regular convolutions after concatenation
     self.conv1 = torch.nn.Conv2d(in_channel, num_filters, (3,3), padding='valid')
     self.batchnorm1 = torch.nn.BatchNorm2d(num_filters)
     self.conv2 = torch.nn.Conv2d(num_filters, num_filters, (3,3), padding='valid')
@@ -53,16 +52,16 @@ class UnetDecoder(torch.nn.Module):
 
     x = self.tconv1(x)
 
+    # calculate padding for skip connection alignment
     diffY = skip_conn.size()[2] - x.size()[2]
     diffX = skip_conn.size()[3] - x.size()[3]
 
     x = torch.nn.functional.pad(x, [diffX // 2, diffX - diffX // 2,diffY // 2, diffY - diffY // 2])
 
-
+    # concatenate with skip connection
     x = torch.cat([x, skip_conn], dim=1)
 
-
-
+    # apply convolutions
     x = self.conv1(x)
     x = self.batchnorm1(x)
     x = torch.nn.functional.relu(x)
@@ -82,31 +81,35 @@ class Unet(torch.nn.Module):
   def __init__(self):
     super().__init__()
 
+    # encoder path
     self.enc1 = UnetEncoder(3,64)
     self.enc2 = UnetEncoder(64,128)
     self.enc3 = UnetEncoder(128,256)
     self.enc4 = UnetEncoder(256,512)
 
+    # bottleneck
     self.bot_conv1 = torch.nn.Conv2d(512,1024, (3,3), padding='valid')
     self.batchnorm1 = torch.nn.BatchNorm2d(1024)
     self.bot_conv2 = torch.nn.Conv2d(1024,1024, (3,3), padding='valid')
     self.batchnorm2 = torch.nn.BatchNorm2d(1024)
 
-
+    # decoder path
     self.dec1 = UnetDecoder(64*2, 64)
     self.dec2 = UnetDecoder(128*2, 128)
     self.dec3 = UnetDecoder(256*2, 256)
     self.dec4 = UnetDecoder(512*2, 512)
 
+    # final output layer
     self.conv_final = torch.nn.Conv2d(64, 1, (1,1), padding='valid')
 
   def forward(self, x):
+    # encoder forward pass
     e1 = self.enc1.forward(x)
     e2 = self.enc2.forward(e1)
     e3 = self.enc3.forward(e2)
     e4 = self.enc4.forward(e3)
 
-
+    # bottleneck processing
     x = self.bot_conv1(e4)
     x = self.batchnorm1(x)
     x = torch.nn.functional.relu(x)
@@ -115,6 +118,7 @@ class Unet(torch.nn.Module):
     x = self.batchnorm2(x)
     x = torch.nn.functional.relu(x)
 
+    # decoder forward pass with skip connections
     d4 = self.dec4.forward(x, e4)
     d3 = self.dec3.forward(d4, e3)
     d2 = self.dec2.forward(d3, e2)
@@ -130,7 +134,7 @@ class Unet(torch.nn.Module):
 # define the LightningModule
 class LitUnet(L.LightningModule):
     def __init__(self):
-        self.example_input_array = torch.Tensor(1, 3, 500, 500) # per stampare le dimensioni
+        self.example_input_array = torch.Tensor(1, 3, 500, 500) # for printing dimensions
         super().__init__()
         self.net = Unet()
 
@@ -139,7 +143,7 @@ class LitUnet(L.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        # training_step defines the train loop.
+        # training_step defines the train loop
         # it is independent of forward
         x, y = batch
         y_pred = self.net(x)
@@ -148,18 +152,18 @@ class LitUnet(L.LightningModule):
         loss = dice_loss(y_pred, y)
         y_pred_bin = (torch.sigmoid(y_pred) > 0.5).float()
 
-        # Calcola l'accuratezza pixel-wise
+        # calculate pixel-wise accuracy
         accuracy = (y_pred_bin == y).float().mean()
         f1_score = dice_coeff(y_pred_bin, y.int())
 
-        # Logging to TensorBoard (if installed) by default
+        # logging to TensorBoard (if installed) by default
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_accuracy", accuracy, prog_bar=True)
         self.log("train_f1", f1_score, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-       # this is the test loop
+       # this is the validation loop
         x, y = batch
         y_pred = self.net(x)
         y_pred = torchvision.transforms.functional.resize(y_pred, (y.shape[2], y.shape[3]))
@@ -167,11 +171,11 @@ class LitUnet(L.LightningModule):
         loss = dice_loss(y_pred, y)
         y_pred_bin = (torch.sigmoid(y_pred) > 0.5).float()
 
-        # Calcola l'accuratezza pixel-wise
+        # calculate pixel-wise accuracy
         accuracy = (y_pred_bin == y).float().mean()
         f1_score = dice_coeff(y_pred_bin, y.int())
 
-        # Log della loss e dell'accuratezza
+        # log loss and accuracy
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_accuracy", accuracy, prog_bar=True)
         self.log("val_f1", f1_score, prog_bar=True)
@@ -186,11 +190,11 @@ class LitUnet(L.LightningModule):
 
         y_pred_bin = (torch.sigmoid(y_pred) > 0.5).float()
 
-        # Calcola l'accuratezza pixel-wise
+        # calculate pixel-wise accuracy
         accuracy = (y_pred_bin == y).float().mean()
         f1_score = dice_coeff(y_pred_bin, y.int())
 
-        # Log della loss e dell'accuratezza
+        # log loss and accuracy
         self.log("test_loss", loss)
         self.log("test_accuracy", accuracy)
         self.log("test_f1", f1_score)
@@ -198,5 +202,3 @@ class LitUnet(L.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
-
-
