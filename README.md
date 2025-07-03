@@ -1,4 +1,4 @@
-# U-Net Human Segmentation
+# U-Net Image Segmentation with Lightning
 
 A PyTorch Lightning implementation of U-Net for human image segmentation tasks.
 
